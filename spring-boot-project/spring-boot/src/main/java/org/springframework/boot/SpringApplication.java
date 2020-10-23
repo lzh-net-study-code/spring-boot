@@ -254,6 +254,7 @@ public class SpringApplication {
 	}
 
 	/**
+	 * 先创建ConfigurableApplicationContext ，然后再调用Run方法
 	 * Create a new {@link SpringApplication} instance. The application context will load
 	 * beans from the specified primary sources (see {@link SpringApplication class-level}
 	 * documentation for details. The instance can be customized before calling
@@ -267,10 +268,16 @@ public class SpringApplication {
 	public SpringApplication(ResourceLoader resourceLoader, Class<?>... primarySources) {
 		this.resourceLoader = resourceLoader;
 		Assert.notNull(primarySources, "PrimarySources must not be null");
+		//保存主类
 		this.primarySources = new LinkedHashSet<>(Arrays.asList(primarySources));
+		//判断当前是什么类型的项目
 		this.webApplicationType = WebApplicationType.deduceFromClasspath();
+		//从类路径下找到META-INF/spring.factories配置的所有的ApplicationContextInitializer
 		setInitializers((Collection) getSpringFactoriesInstances(ApplicationContextInitializer.class));
+		//从类路径下找到META-INF/spring.factories配置的所有的ApplicationListener
 		setListeners((Collection) getSpringFactoriesInstances(ApplicationListener.class));
+
+		//获取main方法的类
 		this.mainApplicationClass = deduceMainApplicationClass();
 	}
 
@@ -301,24 +308,46 @@ public class SpringApplication {
 		ConfigurableApplicationContext context = null;
 		Collection<SpringBootExceptionReporter> exceptionReporters = new ArrayList<>();
 		configureHeadlessProperty();
+		//从类路径下META‐INF/spring.factories,获取SpringApplicationRunListeners
 		SpringApplicationRunListeners listeners = getRunListeners(args);
+		//回调所有的SpringApplicationRunListeners.starting()方法
 		listeners.starting();
 		try {
+			//封装命令行参数
 			ApplicationArguments applicationArguments = new DefaultApplicationArguments(args);
+			//回调SpringApplicationRunListener.environmentPrepared()；
 			ConfigurableEnvironment environment = prepareEnvironment(listeners, applicationArguments);
 			configureIgnoreBeanInfo(environment);
+			//表示环境准备完成
+
+
+			//打印Banner
 			Banner printedBanner = printBanner(environment);
+			//根据环境创建context
 			context = createApplicationContext();
+			//错误的异常报表
 			exceptionReporters = getSpringFactoriesInstances(SpringBootExceptionReporter.class,
 					new Class[] { ConfigurableApplicationContext.class }, context);
+			/**
+			 * 准备上下文环境
+			 * 将Environment保存到IOC中
+			 * applyInitiallizers() 调用所有的Applicationde initialize方法
+			 * 调用所有的SpringApplicationRunListener的contextPrepared();
+			 */
 			prepareContext(context, environment, listeners, applicationArguments, printedBanner);
+			/**
+			 * 刷新容器
+			 * 扫描，创建，加载所有的组件
+			 */
 			refreshContext(context);
 			afterRefresh(context, applicationArguments);
 			stopWatch.stop();
 			if (this.logStartupInfo) {
 				new StartupInfoLogger(this.mainApplicationClass).logStarted(getApplicationLog(), stopWatch);
 			}
+			//所有的SpringApplicationRunListener回调started方法
 			listeners.started(context);
+			//获取所有的ApplicationRunner和CommandLineRunner进行调用
 			callRunners(context, applicationArguments);
 		}
 		catch (Throwable ex) {
@@ -327,6 +356,7 @@ public class SpringApplication {
 		}
 
 		try {
+			//所有的SpringApplicationRunListener的running()
 			listeners.running(context);
 		}
 		catch (Throwable ex) {
@@ -365,9 +395,13 @@ public class SpringApplication {
 
 	private void prepareContext(ConfigurableApplicationContext context, ConfigurableEnvironment environment,
 			SpringApplicationRunListeners listeners, ApplicationArguments applicationArguments, Banner printedBanner) {
+		//准备上下文
 		context.setEnvironment(environment);
+		//将Environment保存到上下文中
 		postProcessApplicationContext(context);
+		//applyInitiallizers() 调用所有的Applicationde initialize方法
 		applyInitializers(context);
+		//调用所有的SpringApplicationRunListener的contextPrepared()；
 		listeners.contextPrepared(context);
 		if (this.logStartupInfo) {
 			logStartupInfo(context.getParent() == null);
@@ -564,13 +598,18 @@ public class SpringApplication {
 	 * class before falling back to a suitable default.
 	 * @return the application context (not yet refreshed)
 	 * @see #setApplicationContextClass(Class)
+	 * 创建上下文
 	 */
 	protected ConfigurableApplicationContext createApplicationContext() {
 		Class<?> contextClass = this.applicationContextClass;
 		if (contextClass == null) {
 			try {
+				//判断上下文的环境
 				switch (this.webApplicationType) {
 				case SERVLET:
+					/**AnnotationConfigServletWebServerApplicationContext
+					 * web环境 加载 {@link org.springframework.boot.web.servlet.context.AnnotationConfigServletWebApplicationContext }.
+					 */
 					contextClass = Class.forName(DEFAULT_SERVLET_WEB_CONTEXT_CLASS);
 					break;
 				case REACTIVE:
@@ -744,6 +783,7 @@ public class SpringApplication {
 	 */
 	protected void refresh(ApplicationContext applicationContext) {
 		Assert.isInstanceOf(AbstractApplicationContext.class, applicationContext);
+		//默认是ServletWebServerApplicationContext
 		((AbstractApplicationContext) applicationContext).refresh();
 	}
 
